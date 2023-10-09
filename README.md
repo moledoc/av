@@ -1,15 +1,20 @@
-## go-av
+# goava
 
-Audio/Video streaming to http server.
+<img src=./resources/goava.jpg width=15% height=15%/>
 
-## Dependencies
+**WIP** Local audio/video streaming thingy written in Go.
 
-* ffmpeg
-* go
+## Getting started
 
-## Running
+Simple file server to serve.
 
-Break a/v files to HLS (HTTP Live Stream) format
+```sh
+go run main.go -simple -dir=<dir to serve>
+```
+
+## Useful ffmpeg commands
+
+* Break a/v files to HLS (HTTP Live Stream) format
 
 ```sh
 ffmpeg \
@@ -23,7 +28,7 @@ ffmpeg \
 	-segment_format mpegts output%03d.ts
 ```
 
-## MKV to MP4
+* MKV to MP4
 
 ```sh
 ffmpeg \
@@ -31,7 +36,7 @@ ffmpeg \
 	-codec copy <video file>.mp4 
 ```
 
-## Add subtitles to MP4
+* Add subtitles to MP4
 
 ```sh
 ffmpeg \
