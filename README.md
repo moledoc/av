@@ -1,6 +1,6 @@
 # goava
 
-<img src=./resources/goava.jpg width=15% height=15%/>
+<img src=./resources/goavas.jpg width=25% height=25%/>
 
 **WIP** Local audio/video streaming thingy written in Go.
 
@@ -28,12 +28,18 @@ ffmpeg \
 	-segment_format mpegts output%03d.ts
 ```
 
-* MKV to MP4
+* MKV to MP4 w/o re-encoding
 
 ```sh
 ffmpeg \
 	-i <video file>.mkv  \
 	-codec copy <video file>.mp4 
+```
+
+* MKV to MP4 w/ re-encoding (slow for movies)
+
+```sh
+ffmpeg -i <video>.mkv -c:v mpeg4 -c:a libvorbis <output>.mp4
 ```
 
 * Add subtitles to MP4
