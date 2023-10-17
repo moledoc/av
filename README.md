@@ -1,6 +1,4 @@
-# goava
-
-<img src=./resources/goavas.jpg width=25% height=25%/>
+# av
 
 **WIP** Local audio/video streaming thingy written in Go.
 
@@ -9,7 +7,7 @@
 Simple file server to serve.
 
 ```sh
-go run main.go -simple -dir=<dir to serve>
+go run main.go -d=<dir to serve>
 ```
 
 ## Useful ffmpeg commands
