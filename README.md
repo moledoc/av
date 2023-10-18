@@ -52,3 +52,17 @@ ffmpeg \
 	-c:s mov_text \
 	outfile.mp4
 ```
+
+* combine (different) audio files
+
+```sh
+ffmpeg \
+	-i "1.mp3" \
+	-i "2.wav" \
+	-i "3.flac" \
+	-filter_complex 'concat=n=${x}:v=0:a=1[a]' \ # ${x}, where x is nr of input, ie how many '-i' flags
+	-map '[a]' \
+	-codec:a libmp3lame \
+	-b:a 256k \
+	output.mp3
+```
