@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"flag"
 	"fmt"
 	"net/http"
@@ -204,6 +205,23 @@ func addHeaders(h http.Handler) http.HandlerFunc {
 	}
 }
 
+// getLocalIP returns the non loopback local IP of the host
+func getLocalIP() string {
+    addrs, err := net.InterfaceAddrs()
+    if err != nil {
+        return ""
+    }
+    for _, address := range addrs {
+        // check the address type and if it is not a loopback the display it
+        if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+            if ipnet.IP.To4() != nil {
+                return ipnet.IP.String()
+            }
+        }
+    }
+    return ""
+}
+
 func printHelp() {
 	fmt.Printf("%v -d <dir> [-p port {:8080}] [-v] [-vv] [-ffmpeg]\n", os.Args[0])
 	flag.PrintDefaults()
@@ -232,6 +250,7 @@ func main() {
 	av := New()
 	http.Handle("/", addHeaders(http.FileServer(http.Dir(*dir))))
 	http.Handle("/av", av)
-	infolog("Serving '%v' at 'http://localhost:%v/av'", *dir, *port)
+	ip := getLocalIP()
+	infolog("Serving '%v' at 'http://%v:%v/av'", *dir, ip, *port)
 	http.ListenAndServe(":" + *port, nil)
 }
