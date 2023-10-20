@@ -18,12 +18,12 @@ var (
 	dir *string
 )
 
-type static struct {
+type AV struct {
 	Html string
 }
 
-func New() static {
-	return static{
+func New() AV {
+	return AV{
 		Html: "<!DOCTYPE html> <html> <head> <style> span { display: flex; align-items: center;} </style> </head> <body>",
 	}
 }
@@ -32,13 +32,13 @@ const music string = "<span><audio controls loop src=\"{{.file}}\" type=\"audio/
 
 const video string = "<span><video controls width=\"320\" height=\"240\" src=\"{{.file}}\" type=\"video/mp4\"></video><font size=\"5\"> - {{.file}}</font></span><br>"
 
-func (s static) String() string {
-	return s.Html + "</body><br></html>"
+func (av AV) String() string {
+	return av.Html + "</body><br></html>"
 }
 
-func (s static) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.parse(dir)
-	fmt.Fprintf(w, s.String())
+func (av AV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	av.parse(dir)
+	fmt.Fprintf(w, av.String())
 }
 
 func errlog(format string, a ...any) {
@@ -156,9 +156,9 @@ func ifFfmpeg(dir string, entries []os.DirEntry) bool {
 }
 
 // parse is a function that parses the directory to be served by the file server.
-// It takes audio and video files and adds html element to the static.Html value.
+// It takes audio and video files and adds html element to the AV.Html value.
 // If -ffmpeg is specified, then it recursively concats each level audio files to a new mp3 file to the directory being served.
-func (st *static) parse(dir *string) {
+func (av *AV) parse(dir *string) {
 	entries, err := os.ReadDir(*dir)
 	if err != nil {
 		errlog("could not open directory '%v'", *dir)
@@ -192,7 +192,7 @@ func (st *static) parse(dir *string) {
 			continue
 		}
 		ehtml = strings.ReplaceAll(ehtml, "{{.file}}", eName)
-		st.Html += ehtml
+		av.Html += ehtml
 		infolog("handled file '%v'", eName)
 	}
 }
@@ -211,7 +211,7 @@ func printHelp() {
 
 func main() {
 	help := flag.Bool("h", false, "this help")
-	port := flag.String("p", ":8080", "port where fileserver will be served")
+	port := flag.String("p", "8080", "port where fileserver will be served")
 	dir = flag.String("d", "", "directory to serve")
 	verbose = flag.Bool("v", false, "verbose application")
 	vverbose = flag.Bool("vv", false, "very verbose application")
@@ -229,9 +229,9 @@ func main() {
 	if *vverbose {
 		*verbose = true
 	}
-	st := New()
+	av := New()
 	http.Handle("/", addHeaders(http.FileServer(http.Dir(*dir))))
-	http.Handle("/st", st)
-	infolog("Serving %v at %v", *dir, *port)
-	http.ListenAndServe(*port, nil)
+	http.Handle("/av", av)
+	infolog("Serving '%v' at 'http://localhost:%v/av'", *dir, *port)
+	http.ListenAndServe(":" + *port, nil)
 }
