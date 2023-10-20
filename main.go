@@ -183,7 +183,7 @@ func (st *static) parse(dir *string) {
 }
 
 func main() {
-	port := flag.String("p", ":8083", "port where fileserver will be served")
+	port := flag.String("p", ":8080", "port where fileserver will be served")
 	dir = flag.String("d", "", "directory to serve")
 	verbose = flag.Bool("v", false, "verbose application")
 	vverbose = flag.Bool("vv", false, "very verbose application")
