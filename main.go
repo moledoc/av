@@ -18,13 +18,6 @@ var (
 	dir *string
 )
 
-func addHeaders(h http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		h.ServeHTTP(w, r)
-	}
-}
-
 type static struct {
 	Html string
 }
@@ -68,9 +61,10 @@ func debuglog(format string, a ...any) {
 	}
 }
 
+// concatAudio is a func that follows directories recursively and all same level audio files are concatenated to a single mp3 file at the parent directory, which is the directory served by the web server.
+// NOTE: there is an external dependency on 'ffmpeg'.
 func concatAudio(parentDir string, dirPath string) {
 	// concat audio files - https://superuser.com/questions/809623/how-to-join-audio-files-of-different-formats-in-ffmpeg
-
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		errlog("could not open directory '%v'\n", dirPath)
@@ -109,7 +103,6 @@ func concatAudio(parentDir string, dirPath string) {
 	args = append(args, "-b:a")
 	args = append(args, "256k")
 	args = append(args, catName)
-	// args = append(args, "> /dev/null 2>&1 &")
 	cmd := exec.Command("ffmpeg", args...)
 	debuglog("cmd: %v\n", cmd.String())
 	err = cmd.Run()
@@ -119,6 +112,9 @@ func concatAudio(parentDir string, dirPath string) {
 	}
 }
 
+// parse is a function that parses the directory to be served by the file server.
+// It takes audio and video files and adds html element to the static.Html value.
+// If -ffmpeg is specified, then it recursively concats each level audio files to a new mp3 file to the directory being served.
 func (st *static) parse(dir *string) {
 	entries, err := os.ReadDir(*dir)
 	if err != nil {
@@ -126,16 +122,18 @@ func (st *static) parse(dir *string) {
 		return
 	}
 
-	fnames := make(map[string]struct{})
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		fnames[e.Name()] = struct{}{}
-	}
 	var reReadDir bool
 	var once sync.Once
 	if *ffmpeg {
+		// collect filenames, so we could ignore already concatenated directories. 
+		fnames := make(map[string]struct{})
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			fnames[e.Name()] = struct{}{}
+		}
+		// concat audio files
 		var wg sync.WaitGroup
 		for _, e := range entries {
 			if !e.IsDir() {
@@ -154,6 +152,7 @@ func (st *static) parse(dir *string) {
 		}
 		wg.Wait()
 	}
+	// if we created any mp3 files, re-read the directory being served to enable serving also the new mp3 files
 	if reReadDir{
 		entries, err = os.ReadDir(*dir)
 		if err != nil {
@@ -161,6 +160,7 @@ func (st *static) parse(dir *string) {
 			return
 		}
 	}
+	// compose html to be served
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -182,12 +182,19 @@ func (st *static) parse(dir *string) {
 	}
 }
 
+func addHeaders(h http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		h.ServeHTTP(w, r)
+	}
+}
+
 func main() {
 	port := flag.String("p", ":8080", "port where fileserver will be served")
 	dir = flag.String("d", "", "directory to serve")
 	verbose = flag.Bool("v", false, "verbose application")
 	vverbose = flag.Bool("vv", false, "very verbose application")
-	ffmpeg = flag.Bool("ffmpeg", false, "concat media files")
+	ffmpeg = flag.Bool("ffmpeg", false, "concat media files recursively from each level to the directory being served; EXTERNAL DEPENDENCY ON FFMPEG")
 	flag.Parse()
 	if *dir == "" {
 		errlog("-d not provided")

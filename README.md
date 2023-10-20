@@ -1,13 +1,23 @@
 # av
 
-**WIP** Local audio/video streaming thingy written in Go.
+Local audio/video streaming thingy written in Go.
+
+## Synopsis
+
+TBD
 
 ## Getting started
 
-Simple file server to serve.
+To start up the web server, you can run the shell script
 
 ```sh
-go run main.go -d=<dir to serve>
+./run.sh
+```
+
+or run
+
+```sh
+go run main.go -d=<directory to be served> [-ffmpeg]
 ```
 
 ## Useful ffmpeg commands
