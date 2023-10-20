@@ -189,20 +189,34 @@ func addHeaders(h http.Handler) http.HandlerFunc {
 	}
 }
 
+func printHelp() {
+	fmt.Printf("%v -d <dir> [-p port {:8080}] [-v] [-vv] [-ffmpeg]\n", os.Args[0])
+	flag.PrintDefaults()
+}
+
 func main() {
+	help := flag.Bool("h", false, "this help")
 	port := flag.String("p", ":8080", "port where fileserver will be served")
 	dir = flag.String("d", "", "directory to serve")
 	verbose = flag.Bool("v", false, "verbose application")
 	vverbose = flag.Bool("vv", false, "very verbose application")
 	ffmpeg = flag.Bool("ffmpeg", false, "concat media files recursively from each level to the directory being served; EXTERNAL DEPENDENCY ON FFMPEG")
 	flag.Parse()
+	if *help {
+		printHelp()
+		return
+	}
 	if *dir == "" {
 		errlog("-d not provided")
+		printHelp()
 		return
+	}
+	if *vverbose {
+		*verbose = true
 	}
 	st := New()
 	http.Handle("/", addHeaders(http.FileServer(http.Dir(*dir))))
 	http.Handle("/st", st)
-	infolog("Serving %v at %v\n", *dir, *port)
+	infolog("Serving %v at %v", *dir, *port)
 	http.ListenAndServe(*port, nil)
 }
