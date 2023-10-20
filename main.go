@@ -42,52 +42,68 @@ func (s static) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func errlog(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "[ERROR]: " + format, a...)
+	fmt.Fprintf(os.Stderr, "[ERROR]: " + format + "\n", a...)
 }
 
 func warnlog(format string, a ...any) {
 	if *verbose || *vverbose {
-		fmt.Fprintf(os.Stdout, "[WARNING]: " + format, a...)
+		fmt.Fprintf(os.Stdout, "[WARNING]: " + format + "\n", a...)
 	}
 }
 
 func infolog(format string, a ...any) {
-	fmt.Fprintf(os.Stdout, "[INFO]: " + format, a...)
+	fmt.Fprintf(os.Stdout, "[INFO]: " + format + "\n", a...)
 }
 
 func debuglog(format string, a ...any) {
 	if *vverbose {
-		fmt.Fprintf(os.Stdout, "[DEBUG]: " + format, a...)
+		fmt.Fprintf(os.Stdout, "[DEBUG]: " + format + "\n", a...)
 	}
 }
 
 // concatAudio is a func that follows directories recursively and all same level audio files are concatenated to a single mp3 file at the parent directory, which is the directory served by the web server.
 // NOTE: there is an external dependency on 'ffmpeg'.
-func concatAudio(parentDir string, dirPath string) {
+func concatAudio(parentDir string, fnames map[string]struct{}, dirPath string) {
 	// concat audio files - https://superuser.com/questions/809623/how-to-join-audio-files-of-different-formats-in-ffmpeg
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		errlog("could not open directory '%v'\n", dirPath)
+		errlog("could not open directory '%v'", dirPath)
 		return
 	}
+	infolog("concatenating '%v'", dirPath)
 	dirElems := strings.Split(dirPath, "/")
 	leafDir := dirElems[len(dirElems)-1]
 	catName := parentDir + "/" + leafDir + ".mp3"
 	var args []string
 	var count uint8
+	var wg sync.WaitGroup
 	for _, e := range entries {
 		eName := e.Name()
 		if e.IsDir() && *ffmpeg {
-			go concatAudio(parentDir, dirPath + "/" + eName)
+			// check if dir already concated
+				_, ok := fnames[e.Name()+".mp3"]
+			debuglog("has dir '%v' been concatenated: %v", e.Name(), ok)
+			if ok {
+				debuglog("skipping %v", e.Name())
+				continue
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				concatAudio(parentDir, fnames, dirPath + "/" + eName)
+			}()
 			continue
 		}
+		wg.Wait()
+
+		// compose ffmpeg command
 		ext := filepath.Ext(eName)
 		if ext != catName && ext == ".mp3" || ext == ".flac" || ext == ".wav" || ext == ".webm" {
 				args = append(args, "-i")
 				args = append(args, fmt.Sprintf("%v/%v", dirPath, eName))
 				count++
 		} else {
-			infolog("skipping file '%v'\n", eName)
+			infolog("skipping file '%v'", eName)
 			continue
 		}
 	}
@@ -104,28 +120,17 @@ func concatAudio(parentDir string, dirPath string) {
 	args = append(args, "256k")
 	args = append(args, catName)
 	cmd := exec.Command("ffmpeg", args...)
-	debuglog("cmd: %v\n", cmd.String())
+	debuglog("cmd: %v", cmd.String())
 	err = cmd.Run()
 	if err != nil {
-		errlog("encountered error while running command:\n\tcmd - %v\n\terr - %v\n", cmd.String(), err)
-		return
+		errlog("encountered error while running command:\n\tcmd - %v\n\terr - %v", cmd.String(), err)
 	}
 }
 
-// parse is a function that parses the directory to be served by the file server.
-// It takes audio and video files and adds html element to the static.Html value.
-// If -ffmpeg is specified, then it recursively concats each level audio files to a new mp3 file to the directory being served.
-func (st *static) parse(dir *string) {
-	entries, err := os.ReadDir(*dir)
-	if err != nil {
-		errlog("could not open directory '%v'\n", *dir)
-		return
-	}
-
-	var reReadDir bool
+func ifFfmpeg(dir string, entries []os.DirEntry) bool {
+		// collect filenames, so we could ignore already concatenated directories.
 	var once sync.Once
-	if *ffmpeg {
-		// collect filenames, so we could ignore already concatenated directories. 
+		reReadDir := false
 		fnames := make(map[string]struct{})
 		for _, e := range entries {
 			if e.IsDir() {
@@ -134,30 +139,40 @@ func (st *static) parse(dir *string) {
 			fnames[e.Name()] = struct{}{}
 		}
 		// concat audio files
-		var wg sync.WaitGroup
 		for _, e := range entries {
 			if !e.IsDir() {
 				continue
 			}
 			_, ok := fnames[e.Name()+".mp3"]
+			debuglog("has dir '%v' been concatenated: %v", e.Name(), ok)
 			if ok {
+				debuglog("skipping", e.Name())
 				continue
 			}
-			wg.Add(1)
 			once.Do(func() {reReadDir = true})
-			go func() {
-				defer wg.Done()
-				concatAudio(*dir, *dir + "/" + e.Name())
-			}()
+			concatAudio(dir, fnames, dir + "/" + e.Name())
 		}
-		wg.Wait()
+	return reReadDir
+}
+
+// parse is a function that parses the directory to be served by the file server.
+// It takes audio and video files and adds html element to the static.Html value.
+// If -ffmpeg is specified, then it recursively concats each level audio files to a new mp3 file to the directory being served.
+func (st *static) parse(dir *string) {
+	entries, err := os.ReadDir(*dir)
+	if err != nil {
+		errlog("could not open directory '%v'", *dir)
+		return
 	}
-	// if we created any mp3 files, re-read the directory being served to enable serving also the new mp3 files
-	if reReadDir{
-		entries, err = os.ReadDir(*dir)
-		if err != nil {
-			errlog("could not open directory '%v'\n", *dir)
-			return
+
+	if *ffmpeg {
+		// if we created any mp3 files, re-read the directory being served to enable serving also the new mp3 files
+		if ifFfmpeg(*dir, entries) {
+			entries, err = os.ReadDir(*dir)
+			if err != nil {
+				errlog("could not open directory '%v'", *dir)
+				return
+			}
 		}
 	}
 	// compose html to be served
@@ -173,12 +188,12 @@ func (st *static) parse(dir *string) {
 		} else if ext == ".mp4" || ext == ".mkv" {
 				ehtml = video
 		} else {
-			infolog("skipping file '%v'\n", eName)
+			infolog("skipping file '%v'", eName)
 			continue
 		}
 		ehtml = strings.ReplaceAll(ehtml, "{{.file}}", eName)
 		st.Html += ehtml
-		infolog("handled file %v\n", eName)
+		infolog("handled file '%v'", eName)
 	}
 }
 
