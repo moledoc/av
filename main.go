@@ -3,11 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+)
+
+var (
+	ffmpeg *bool
+	verbose *bool
+	vverbose *bool
+	dir *string
 )
 
 func addHeaders(h http.Handler) http.HandlerFunc {
@@ -36,52 +44,158 @@ func (s static) String() string {
 }
 
 func (s static) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.parse(dir)
 	fmt.Fprintf(w, s.String())
 }
 
-func logs(verbose bool, w io.Writer, format string, a ...any) {
-	if !verbose {
-		return
-	}
-	fmt.Fprintf(w, format, a...)
+func errlog(format string, a ...any) {
+	fmt.Fprintf(os.Stderr, "[ERROR]: " + format, a...)
 }
 
-func main() {
-	port := flag.String("p", ":8081", "port where fileserver will be served")
-	dir := flag.String("d", "", "directory to serve")
-	verbose := flag.Bool("v", false, "verbose application")
-	flag.Parse()
-	if *dir == "" {
-		logs(*verbose, os.Stderr, "[ERROR]: -d not provided")
+func warnlog(format string, a ...any) {
+	if *verbose || *vverbose {
+		fmt.Fprintf(os.Stdout, "[WARNING]: " + format, a...)
+	}
+}
+
+func infolog(format string, a ...any) {
+	fmt.Fprintf(os.Stdout, "[INFO]: " + format, a...)
+}
+
+func debuglog(format string, a ...any) {
+	if *vverbose {
+		fmt.Fprintf(os.Stdout, "[DEBUG]: " + format, a...)
+	}
+}
+
+func concatAudio(parentDir string, dirPath string) {
+	// concat audio files - https://superuser.com/questions/809623/how-to-join-audio-files-of-different-formats-in-ffmpeg
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		errlog("could not open directory '%v'\n", dirPath)
 		return
 	}
+	dirElems := strings.Split(dirPath, "/")
+	leafDir := dirElems[len(dirElems)-1]
+	catName := parentDir + "/" + leafDir + ".mp3"
+	var args []string
+	var count uint8
+	for _, e := range entries {
+		eName := e.Name()
+		if e.IsDir() && *ffmpeg {
+			go concatAudio(parentDir, dirPath + "/" + eName)
+			continue
+		}
+		ext := filepath.Ext(eName)
+		if ext != catName && ext == ".mp3" || ext == ".flac" || ext == ".wav" || ext == ".webm" {
+				args = append(args, "-i")
+				args = append(args, fmt.Sprintf("%v/%v", dirPath, eName))
+				count++
+		} else {
+			infolog("skipping file '%v'\n", eName)
+			continue
+		}
+	}
+	if count == 0 {
+		return
+	}
+	args = append(args, "-filter_complex")
+	args = append(args, fmt.Sprintf("concat=n=%v:v=0:a=1[a]", count))
+	args = append(args, "-map")
+	args = append(args, "[a]")
+	args = append(args, "-codec:a")
+	args = append(args, "libmp3lame")
+	args = append(args, "-b:a")
+	args = append(args, "256k")
+	args = append(args, catName)
+	// args = append(args, "> /dev/null 2>&1 &")
+	cmd := exec.Command("ffmpeg", args...)
+	debuglog("cmd: %v\n", cmd.String())
+	err = cmd.Run()
+	if err != nil {
+		errlog("encountered error while running command:\n\tcmd - %v\n\terr - %v\n", cmd.String(), err)
+		return
+	}
+}
+
+func (st *static) parse(dir *string) {
 	entries, err := os.ReadDir(*dir)
 	if err != nil {
-		logs(*verbose, os.Stderr, "[ERROR]: could not open directory '%v'\n", *dir)
-		os.Exit(1)
+		errlog("could not open directory '%v'\n", *dir)
+		return
 	}
-	st := New()
+
+	fnames := make(map[string]struct{})
 	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		fnames[e.Name()] = struct{}{}
+	}
+	var reReadDir bool
+	var once sync.Once
+	if *ffmpeg {
+		var wg sync.WaitGroup
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			_, ok := fnames[e.Name()+".mp3"]
+			if ok {
+				continue
+			}
+			wg.Add(1)
+			once.Do(func() {reReadDir = true})
+			go func() {
+				defer wg.Done()
+				concatAudio(*dir, *dir + "/" + e.Name())
+			}()
+		}
+		wg.Wait()
+	}
+	if reReadDir{
+		entries, err = os.ReadDir(*dir)
+		if err != nil {
+			errlog("could not open directory '%v'\n", *dir)
+			return
+		}
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
 		eName := e.Name()
 		ext := filepath.Ext(eName)
 		var ehtml string
-		switch ext {
-		case ".mp3":
-			ehtml = music
-		case ".mp4":
-			ehtml = video
-		case ".mkv":
-			ehtml = video
-		default:
-			logs(*verbose, os.Stdout, "[INFO]: skipping file '%v'\n", eName)
+		if ext == ".mp3" || ext == ".flac" || ext == ".wav" || ext == ".webm" {
+				ehtml = music
+		} else if ext == ".mp4" || ext == ".mkv" {
+				ehtml = video
+		} else {
+			infolog("skipping file '%v'\n", eName)
 			continue
 		}
 		ehtml = strings.ReplaceAll(ehtml, "{{.file}}", eName)
 		st.Html += ehtml
-		logs(*verbose, os.Stdout, "[INFO]: handled file %v\n", eName)
+		infolog("handled file %v\n", eName)
 	}
+}
+
+func main() {
+	port := flag.String("p", ":8080", "port where fileserver will be served")
+	dir = flag.String("d", "", "directory to serve")
+	verbose = flag.Bool("v", false, "verbose application")
+	vverbose = flag.Bool("vv", false, "very verbose application")
+	ffmpeg = flag.Bool("ffmpeg", false, "concat media files")
+	flag.Parse()
+	if *dir == "" {
+		errlog("-d not provided")
+		return
+	}
+	st := New()
 	http.Handle("/", addHeaders(http.FileServer(http.Dir(*dir))))
 	http.Handle("/st", st)
-	logs(*verbose, os.Stdout, "Serving %v at %v\n", *dir, *port)
+	infolog("Serving %v at %v\n", *dir, *port)
 	http.ListenAndServe(*port, nil)
 }
