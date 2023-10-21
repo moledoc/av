@@ -5,14 +5,14 @@ Local audio/video streaming thingy written in Go.
 ## Synopsis
 
 ```
-./av -d <dir> [-p port {:8080}] [-v] [-vv] [-ffmpeg]
+./av -d <dir> [-p port {8080}] [-v] [-vv] [-ffmpeg]
   -d string
         directory to serve
   -ffmpeg
         concat media files recursively from each level to the directory being served; EXTERNAL DEPENDENCY ON FFMPEG
   -h    this help
   -p string
-        port where fileserver will be served (default ":8080")
+        port where fileserver will be served (default "8080")
   -v    verbose application
   -vv
         very verbose application
@@ -29,8 +29,8 @@ To start up the web server, you can run the shell script
 or 
 
 ```sh
-go run main.go -d <dir> [-p port {:8080}] [-v] [-vv] [-ffmpeg]
-go build && ./av -d <dir> [-p port {:8080}] [-v] [-vv] [-ffmpeg]
+go run main.go -d <dir> [-p port {8080}] [-v] [-vv] [-ffmpeg]
+go build && ./av -d <dir> [-p port {8080}] [-v] [-vv] [-ffmpeg]
 ```
 
 ## Useful ffmpeg commands

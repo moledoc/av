@@ -19,13 +19,13 @@ var (
 	dir *string
 )
 
-type AV struct {
-	Html string
+type audvid struct {
+	html string
 }
 
-func New() AV {
-	return AV{
-		Html: "<!DOCTYPE html> <html> <head> <style> span { display: flex; align-items: center;} </style> </head> <body>",
+func new() audvid {
+	return audvid{
+		html: "<!DOCTYPE html> <html> <head> <style> span { display: flex; align-items: center;} </style> </head> <body>",
 	}
 }
 
@@ -33,11 +33,11 @@ const music string = "<span><audio controls loop src=\"{{.file}}\" type=\"audio/
 
 const video string = "<span><video controls width=\"320\" height=\"240\" src=\"{{.file}}\" type=\"video/mp4\"></video><font size=\"5\"> - {{.file}}</font></span><br>"
 
-func (av AV) String() string {
-	return av.Html + "</body><br></html>"
+func (av audvid) String() string {
+	return av.html + "</body><br></html>"
 }
 
-func (av AV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (av audvid) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	av.parse(dir)
 	fmt.Fprintf(w, av.String())
 }
@@ -157,9 +157,9 @@ func ifFfmpeg(dir string, entries []os.DirEntry) bool {
 }
 
 // parse is a function that parses the directory to be served by the file server.
-// It takes audio and video files and adds html element to the AV.Html value.
+// It takes audio and video files and adds html element to the audvid.html value.
 // If -ffmpeg is specified, then it recursively concats each level audio files to a new mp3 file to the directory being served.
-func (av *AV) parse(dir *string) {
+func (av *audvid) parse(dir *string) {
 	entries, err := os.ReadDir(*dir)
 	if err != nil {
 		errlog("could not open directory '%v'", *dir)
@@ -193,7 +193,7 @@ func (av *AV) parse(dir *string) {
 			continue
 		}
 		ehtml = strings.ReplaceAll(ehtml, "{{.file}}", eName)
-		av.Html += ehtml
+		av.html += ehtml
 		infolog("handled file '%v'", eName)
 	}
 }
@@ -223,7 +223,7 @@ func getLocalIP() string {
 }
 
 func printHelp() {
-	fmt.Printf("%v -d <dir> [-p port {:8080}] [-v] [-vv] [-ffmpeg]\n", os.Args[0])
+	fmt.Printf("%v -d <dir> [-p port {8080}] [-v] [-vv] [-ffmpeg]\n", os.Args[0])
 	flag.PrintDefaults()
 }
 
@@ -247,7 +247,7 @@ func main() {
 	if *vverbose {
 		*verbose = true
 	}
-	av := New()
+	av := new()
 	http.Handle("/", addHeaders(http.FileServer(http.Dir(*dir))))
 	http.Handle("/av", av)
 	ip := getLocalIP()
