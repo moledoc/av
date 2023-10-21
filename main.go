@@ -1,9 +1,9 @@
 package main
 
 import (
-	"net"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	ffmpeg *bool
-	verbose *bool
+	ffmpeg   *bool
+	verbose  *bool
 	vverbose *bool
-	dir *string
+	dir      *string
 )
 
 type audvid struct {
@@ -43,22 +43,22 @@ func (av audvid) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func errlog(format string, a ...any) {
-	fmt.Fprintf(os.Stderr, "[ERROR]: " + format + "\n", a...)
+	fmt.Fprintf(os.Stderr, "[ERROR]: "+format+"\n", a...)
 }
 
 func warnlog(format string, a ...any) {
 	if *verbose || *vverbose {
-		fmt.Fprintf(os.Stdout, "[WARNING]: " + format + "\n", a...)
+		fmt.Fprintf(os.Stdout, "[WARNING]: "+format+"\n", a...)
 	}
 }
 
 func infolog(format string, a ...any) {
-	fmt.Fprintf(os.Stdout, "[INFO]: " + format + "\n", a...)
+	fmt.Fprintf(os.Stdout, "[INFO]: "+format+"\n", a...)
 }
 
 func debuglog(format string, a ...any) {
 	if *vverbose {
-		fmt.Fprintf(os.Stdout, "[DEBUG]: " + format + "\n", a...)
+		fmt.Fprintf(os.Stdout, "[DEBUG]: "+format+"\n", a...)
 	}
 }
 
@@ -82,7 +82,7 @@ func concatAudio(parentDir string, fnames map[string]struct{}, dirPath string) {
 		eName := e.Name()
 		if e.IsDir() && *ffmpeg {
 			// check if dir already concated
-				_, ok := fnames[e.Name()+".mp3"]
+			_, ok := fnames[e.Name()+".mp3"]
 			debuglog("has dir '%v' been concatenated: %v", e.Name(), ok)
 			if ok {
 				debuglog("skipping %v", e.Name())
@@ -91,7 +91,7 @@ func concatAudio(parentDir string, fnames map[string]struct{}, dirPath string) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				concatAudio(parentDir, fnames, dirPath + "/" + eName)
+				concatAudio(parentDir, fnames, dirPath+"/"+eName)
 			}()
 			continue
 		}
@@ -100,9 +100,9 @@ func concatAudio(parentDir string, fnames map[string]struct{}, dirPath string) {
 		// compose ffmpeg command
 		ext := filepath.Ext(eName)
 		if ext != catName && ext == ".mp3" || ext == ".flac" || ext == ".wav" || ext == ".webm" {
-				args = append(args, "-i")
-				args = append(args, fmt.Sprintf("%v/%v", dirPath, eName))
-				count++
+			args = append(args, "-i")
+			args = append(args, fmt.Sprintf("%v/%v", dirPath, eName))
+			count++
 		} else {
 			infolog("skipping file '%v'", eName)
 			continue
@@ -129,30 +129,30 @@ func concatAudio(parentDir string, fnames map[string]struct{}, dirPath string) {
 }
 
 func ifFfmpeg(dir string, entries []os.DirEntry) bool {
-		// collect filenames, so we could ignore already concatenated directories.
+	// collect filenames, so we could ignore already concatenated directories.
 	var once sync.Once
-		reReadDir := false
-		fnames := make(map[string]struct{})
-		for _, e := range entries {
-			if e.IsDir() {
-				continue
-			}
-			fnames[e.Name()] = struct{}{}
+	reReadDir := false
+	fnames := make(map[string]struct{})
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
 		}
-		// concat audio files
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			_, ok := fnames[e.Name()+".mp3"]
-			debuglog("has dir '%v' been concatenated: %v", e.Name(), ok)
-			if ok {
-				debuglog("skipping", e.Name())
-				continue
-			}
-			once.Do(func() {reReadDir = true})
-			concatAudio(dir, fnames, dir + "/" + e.Name())
+		fnames[e.Name()] = struct{}{}
+	}
+	// concat audio files
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
 		}
+		_, ok := fnames[e.Name()+".mp3"]
+		debuglog("has dir '%v' been concatenated: %v", e.Name(), ok)
+		if ok {
+			debuglog("skipping", e.Name())
+			continue
+		}
+		once.Do(func() { reReadDir = true })
+		concatAudio(dir, fnames, dir+"/"+e.Name())
+	}
 	return reReadDir
 }
 
@@ -185,9 +185,9 @@ func (av *audvid) parse(dir *string) {
 		ext := filepath.Ext(eName)
 		var ehtml string
 		if ext == ".mp3" || ext == ".flac" || ext == ".wav" || ext == ".webm" {
-				ehtml = music
+			ehtml = music
 		} else if ext == ".mp4" || ext == ".mkv" {
-				ehtml = video
+			ehtml = video
 		} else {
 			infolog("skipping file '%v'", eName)
 			continue
@@ -207,19 +207,19 @@ func addHeaders(h http.Handler) http.HandlerFunc {
 
 // getLocalIP returns the non loopback local IP of the host
 func getLocalIP() string {
-    addrs, err := net.InterfaceAddrs()
-    if err != nil {
-        return ""
-    }
-    for _, address := range addrs {
-        // check the address type and if it is not a loopback the display it
-        if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-            if ipnet.IP.To4() != nil {
-                return ipnet.IP.String()
-            }
-        }
-    }
-    return ""
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, address := range addrs {
+		// check the address type and if it is not a loopback the display it
+		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return ""
 }
 
 func printHelp() {
@@ -252,5 +252,5 @@ func main() {
 	http.Handle("/av", av)
 	ip := getLocalIP()
 	infolog("Serving '%v' at 'http://%v:%v/av'", *dir, ip, *port)
-	http.ListenAndServe(":" + *port, nil)
+	http.ListenAndServe(":"+*port, nil)
 }
